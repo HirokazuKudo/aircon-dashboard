@@ -7,6 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>エアコン</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/5.3.4/mqtt.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <style>
   :root {
     --bg: #12151a;
@@ -328,6 +329,68 @@
     margin-top: 10px;
     min-height: 14px;
   }
+
+  .icon-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: var(--bg-soft);
+    color: var(--ink-dim);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+  .icon-btn:active { background: #232833; }
+
+  .history-overlay {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom) 0;
+  }
+  .history-overlay.hidden { display: none; }
+
+  .history-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 20px 8px;
+  }
+
+  .history-title { font-size: 16px; font-weight: 700; }
+
+  .history-body {
+    flex: 1;
+    padding: 8px 16px 20px;
+    display: flex;
+    flex-direction: column;
+    max-width: 480px;
+    width: 100%;
+    margin: 0 auto;
+    min-height: 0;
+  }
+
+  .history-chart-card {
+    background: var(--bg-soft);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 16px 12px;
+    flex: 1;
+    min-height: 260px;
+    position: relative;
+  }
+
+  .history-note {
+    font-size: 12px;
+    color: #565d6b;
+    line-height: 1.6;
+    padding: 14px 6px 0;
+  }
 </style>
 </head>
 <body>
@@ -345,8 +408,26 @@
 
 <header>
   <div class="brand">エアコン</div>
-  <div class="conn"><span class="conn-dot" id="connDot"></span><span id="connText">未接続</span></div>
+  <div style="display:flex; align-items:center; gap:10px;">
+    <div class="conn"><span class="conn-dot" id="connDot"></span><span id="connText">未接続</span></div>
+    <button class="icon-btn" id="historyBtn" aria-label="温湿度の推移を見る">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="14 7 21 7 21 14"/></svg>
+    </button>
+  </div>
 </header>
+
+<div class="history-overlay hidden" id="historyOverlay">
+  <div class="history-header">
+    <div class="history-title">温湿度の推移</div>
+    <button class="icon-btn" id="historyClose" aria-label="閉じる">✕</button>
+  </div>
+  <div class="history-body">
+    <div class="history-chart-card">
+      <canvas id="historyChart"></canvas>
+    </div>
+    <p class="history-note">このページを開いている間に受信したデータのみを表示しています。ページを閉じたり再読み込みすると履歴はリセットされます。</p>
+  </div>
+</div>
 
 <main>
   <div class="room-card">
@@ -437,6 +518,93 @@ function renderState() {
   el.powerfulSwitch.classList.toggle('on', powerfulOn);
 }
 
+// ---- 温湿度の推移グラフ ----
+const MAX_HISTORY = 300; // 保持する最大データ点数(セッション中のみ)
+let historyChart = null;
+
+function initHistoryChart() {
+  const ctx = document.getElementById('historyChart').getContext('2d');
+  historyChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [
+        {
+          label: '温度(℃)',
+          data: [],
+          borderColor: '#5ec8d8',
+          backgroundColor: 'transparent',
+          yAxisID: 'y',
+          tension: 0.3,
+          pointRadius: 0,
+          borderWidth: 2,
+        },
+        {
+          label: '湿度(%)',
+          data: [],
+          borderColor: '#9b8ce0',
+          backgroundColor: 'transparent',
+          yAxisID: 'y1',
+          tension: 0.3,
+          pointRadius: 0,
+          borderWidth: 2,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      interaction: { mode: 'index', intersect: false },
+      scales: {
+        x: {
+          ticks: { color: '#8a93a3', maxRotation: 0, autoSkip: true, maxTicksLimit: 6, font: { size: 11 } },
+          grid: { color: '#262b33' },
+        },
+        y: {
+          position: 'left',
+          ticks: { color: '#5ec8d8', font: { size: 11 } },
+          grid: { color: '#262b33' },
+        },
+        y1: {
+          position: 'right',
+          ticks: { color: '#9b8ce0', font: { size: 11 } },
+          grid: { drawOnChartArea: false },
+        },
+      },
+      plugins: {
+        legend: { labels: { color: '#eef0f3', boxWidth: 12, font: { size: 12 } } },
+      },
+    },
+  });
+}
+
+function pushHistory(temp, hum) {
+  if (!historyChart) return;
+  const label = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+  historyChart.data.labels.push(label);
+  historyChart.data.datasets[0].data.push(temp);
+  historyChart.data.datasets[1].data.push(hum);
+
+  if (historyChart.data.labels.length > MAX_HISTORY) {
+    historyChart.data.labels.shift();
+    historyChart.data.datasets[0].data.shift();
+    historyChart.data.datasets[1].data.shift();
+  }
+  historyChart.update('none');
+}
+
+document.getElementById('historyBtn').addEventListener('click', () => {
+  document.getElementById('historyOverlay').classList.remove('hidden');
+  if (historyChart) historyChart.resize();
+});
+
+document.getElementById('historyClose').addEventListener('click', () => {
+  document.getElementById('historyOverlay').classList.add('hidden');
+});
+
+initHistoryChart();
+
 // ---- MQTT接続(ログインフォーム送信時にのみ実行) ----
 let client = null;
 
@@ -479,6 +647,9 @@ function connectMqtt(username, password) {
         }
         if (typeof data.humidity === 'number') {
           el.roomHum.textContent = '湿度 ' + data.humidity.toFixed(0) + '%';
+        }
+        if (typeof data.temperature === 'number' && typeof data.humidity === 'number') {
+          pushHistory(data.temperature, data.humidity);
         }
         el.roomUpdated.textContent = '最終更新 ' + new Date().toLocaleTimeString('ja-JP');
       } catch (e) {
