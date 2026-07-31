@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>エアコン</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/5.3.4/mqtt.min.js"></script>
+<style>
+  :root {
+    --bg: #12151a;
+    --bg-soft: #1a1e25;
+    --line: #262b33;
+    --ink: #eef0f3;
+    --ink-dim: #8a93a3;
+    --cool: #5ec8d8;
+    --heat: #e8a33d;
+    --dry: #9b8ce0;
+    --off: #4a5160;
+    --danger: #d8685e;
+    --accent: var(--cool);
+    --radius: 20px;
+    font-size: 16px;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic UI", sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100dvh;
+    padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom) 0;
+    transition: background 900ms ease;
+  }
+
+  body.mode-heat { background: radial-gradient(ellipse at 50% -10%, #2a2015 0%, var(--bg) 55%); }
+  body.mode-cool { background: radial-gradient(ellipse at 50% -10%, #12252a 0%, var(--bg) 55%); }
+  body.mode-dry  { background: radial-gradient(ellipse at 50% -10%, #201f2c 0%, var(--bg) 55%); }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 22px 6px;
+  }
+
+  .brand {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--ink-dim);
+  }
+
+  .conn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--ink-dim);
+  }
+
+  .conn-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--danger);
+    transition: background 300ms ease;
+  }
+  .conn-dot.live { background: #6fd18c; }
+
+  main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 6px 18px 24px;
+    max-width: 480px;
+    width: 100%;
+    margin: 0 auto;
+  }
+
+  .room-card {
+    background: var(--bg-soft);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 28px 24px;
+    text-align: center;
+  }
+
+  .room-label {
+    font-size: 13px;
+    color: var(--ink-dim);
+    letter-spacing: 0.04em;
+  }
+
+  .room-temp {
+    font-size: 68px;
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    margin-top: 4px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .room-temp span { font-size: 32px; font-weight: 500; color: var(--ink-dim); }
+
+  .room-sub {
+    margin-top: 8px;
+    font-size: 14px;
+    color: var(--ink-dim);
+  }
+
+  .room-updated {
+    margin-top: 10px;
+    font-size: 11px;
+    color: #565d6b;
+  }
+
+  .card {
+    background: var(--bg-soft);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 20px;
+  }
+
+  .card-title {
+    font-size: 12px;
+    color: var(--ink-dim);
+    letter-spacing: 0.05em;
+    margin-bottom: 12px;
+  }
+
+  .power-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .power-label { font-size: 16px; font-weight: 600; }
+  .power-sub { font-size: 12px; color: var(--ink-dim); margin-top: 2px; }
+
+  .switch {
+    position: relative;
+    width: 56px;
+    height: 32px;
+    border-radius: 20px;
+    background: var(--off);
+    border: none;
+    cursor: pointer;
+    transition: background 250ms ease;
+    flex-shrink: 0;
+  }
+  .switch::after {
+    content: "";
+    position: absolute;
+    top: 3px; left: 3px;
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: #fff;
+    transition: transform 250ms ease;
+  }
+  .switch.on { background: var(--accent); }
+  .switch.on::after { transform: translateX(24px); }
+
+  .mode-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 16px;
+  }
+
+  .mode-btn {
+    flex: 1;
+    padding: 12px 0;
+    border-radius: 14px;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--ink-dim);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 200ms ease;
+  }
+  .mode-btn.active[data-mode="cool"] { background: rgba(94,200,216,0.16); border-color: var(--cool); color: var(--cool); }
+  .mode-btn.active[data-mode="heat"] { background: rgba(232,163,61,0.16); border-color: var(--heat); color: var(--heat); }
+  .mode-btn.active[data-mode="dry"]  { background: rgba(155,140,224,0.16); border-color: var(--dry); color: var(--dry); }
+
+  .temp-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 28px;
+    margin-top: 18px;
+  }
+
+  .temp-step {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    border: 1px solid var(--line);
+    background: var(--bg);
+    color: var(--ink);
+    font-size: 22px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .temp-step:active { background: #232833; }
+
+  .temp-value {
+    font-size: 44px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    min-width: 110px;
+    text-align: center;
+  }
+  .temp-value span { font-size: 20px; color: var(--ink-dim); font-weight: 500; }
+
+  .powerful-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
+  }
+
+  .note {
+    font-size: 12px;
+    color: #565d6b;
+    line-height: 1.6;
+    padding: 0 4px;
+  }
+
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: #232833;
+    color: var(--ink);
+    padding: 10px 18px;
+    border-radius: 12px;
+    font-size: 13px;
+    opacity: 0;
+    transition: all 250ms ease;
+    pointer-events: none;
+    border: 1px solid var(--line);
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">エアコン</div>
+  <div class="conn"><span class="conn-dot" id="connDot"></span><span id="connText">未接続</span></div>
+</header>
+
+<main>
+  <div class="room-card">
+    <div class="room-label">部屋の温度</div>
+    <div class="room-temp" id="roomTemp">--<span>℃</span></div>
+    <div class="room-sub" id="roomHum">湿度 --%</div>
+    <div class="room-updated" id="roomUpdated">データ待機中</div>
+  </div>
+
+  <div class="card">
+    <div class="power-row">
+      <div>
+        <div class="power-label">電源</div>
+        <div class="power-sub" id="powerSub">オフ</div>
+      </div>
+      <button class="switch" id="powerSwitch"></button>
+    </div>
+
+    <div class="mode-row">
+      <button class="mode-btn" data-mode="cool">冷房</button>
+      <button class="mode-btn" data-mode="heat">暖房</button>
+      <button class="mode-btn" data-mode="dry">除湿</button>
+    </div>
+
+    <div class="temp-row">
+      <button class="temp-step" id="tempDown">−</button>
+      <div class="temp-value" id="tempValue">26<span>℃</span></div>
+      <button class="temp-step" id="tempUp">＋</button>
+    </div>
+
+    <div class="powerful-row">
+      <div>
+        <div class="power-label" style="font-size:14px;">パワフル運転</div>
+        <div class="power-sub">冷房26℃固定</div>
+      </div>
+      <button class="switch" id="powerfulSwitch"></button>
+    </div>
+  </div>
+
+  <p class="note">
+    赤外線はエアコンへの一方通行のため、上の設定表示は「最後にこのページから送った内容」であり、エアコン本体の実際の状態と一致している保証はありません。部屋の温度・湿度はセンサーから届いた実測値です。
+  </p>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ===== ここを自分の環境に合わせて書き換えてください =====
+const MQTT_HOST = "wss://40ac0dad86dd4d6aa88e586c1597e810.s1.eu.hivemq.cloud:8884/mqtt"; // TLS Websocket URL
+const MQTT_USER = "dashboard_aircon";
+const MQTT_PASS = "Hirokazu3628800";
+// =======================================================
+
+const COMMAND_TOPIC = "home/aircon/command";
+const STATUS_TOPIC  = "home/aircon/status";
+
+let state = { power: false, mode: "cool", temp: 26 };
+let powerfulOn = false;
+
+const el = {
+  connDot: document.getElementById('connDot'),
+  connText: document.getElementById('connText'),
+  roomTemp: document.getElementById('roomTemp'),
+  roomHum: document.getElementById('roomHum'),
+  roomUpdated: document.getElementById('roomUpdated'),
+  powerSwitch: document.getElementById('powerSwitch'),
+  powerSub: document.getElementById('powerSub'),
+  powerfulSwitch: document.getElementById('powerfulSwitch'),
+  tempValue: document.getElementById('tempValue'),
+  toast: document.getElementById('toast'),
+};
+
+function showToast(msg) {
+  el.toast.textContent = msg;
+  el.toast.classList.add('show');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => el.toast.classList.remove('show'), 2200);
+}
+
+function renderState() {
+  document.body.className = state.power ? `mode-${state.mode}` : '';
+  el.powerSwitch.classList.toggle('on', state.power);
+  el.powerSub.textContent = state.power ? '運転中' : 'オフ';
+  el.tempValue.innerHTML = state.temp + '<span>℃</span>';
+  document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.mode === state.mode);
+  });
+  el.powerfulSwitch.classList.toggle('on', powerfulOn);
+}
+
+// ---- MQTT接続 ----
+const client = mqtt.connect(MQTT_HOST, {
+  username: MQTT_USER,
+  password: MQTT_PASS,
+  clientId: 'dashboard-' + Math.random().toString(16).slice(2),
+});
+
+client.on('connect', () => {
+  el.connDot.classList.add('live');
+  el.connText.textContent = '接続中';
+  client.subscribe(STATUS_TOPIC);
+});
+
+client.on('reconnect', () => {
+  el.connDot.classList.remove('live');
+  el.connText.textContent = '再接続中';
+});
+
+client.on('close', () => {
+  el.connDot.classList.remove('live');
+  el.connText.textContent = '未接続';
+});
+
+client.on('message', (topic, payload) => {
+  if (topic === STATUS_TOPIC) {
+    try {
+      const data = JSON.parse(payload.toString());
+      if (typeof data.temperature === 'number') {
+        el.roomTemp.innerHTML = data.temperature.toFixed(1) + '<span>℃</span>';
+      }
+      if (typeof data.humidity === 'number') {
+        el.roomHum.textContent = '湿度 ' + data.humidity.toFixed(0) + '%';
+      }
+      el.roomUpdated.textContent = '最終更新 ' + new Date().toLocaleTimeString('ja-JP');
+    } catch (e) {
+      console.error('status JSON parse error', e);
+    }
+  }
+});
+
+function publish(payload) {
+  client.publish(COMMAND_TOPIC, JSON.stringify(payload));
+}
+
+// ---- 操作 ----
+el.powerSwitch.addEventListener('click', () => {
+  state.power = !state.power;
+  renderState();
+  publish({ power: state.power, mode: state.mode, temp: state.temp });
+  showToast(state.power ? '電源ONを送信しました' : '電源OFFを送信しました');
+});
+
+document.querySelectorAll('.mode-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    state.mode = btn.dataset.mode;
+    state.power = true;
+    renderState();
+    publish({ power: true, mode: state.mode, temp: state.temp });
+    showToast(btn.textContent + 'に切り替えました');
+  });
+});
+
+document.getElementById('tempUp').addEventListener('click', () => {
+  state.temp = Math.min(31, state.temp + 1);
+  renderState();
+  publish({ temp: state.temp });
+  showToast(state.temp + '℃に設定しました');
+});
+
+document.getElementById('tempDown').addEventListener('click', () => {
+  state.temp = Math.max(16, state.temp - 1);
+  renderState();
+  publish({ temp: state.temp });
+  showToast(state.temp + '℃に設定しました');
+});
+
+el.powerfulSwitch.addEventListener('click', () => {
+  powerfulOn = !powerfulOn;
+  renderState();
+  publish({ powerful: powerfulOn });
+  showToast(powerfulOn ? 'パワフルONを送信しました' : 'パワフルOFFを送信しました');
+});
+
+renderState();
+</script>
+</body>
+</html>
