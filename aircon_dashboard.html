@@ -425,7 +425,7 @@
     <div class="history-chart-card">
       <canvas id="historyChart"></canvas>
     </div>
-    <p class="history-note">このページを開いている間に受信したデータのみを表示しています。ページを閉じたり再読み込みすると履歴はリセットされます。</p>
+    <p class="history-note">ESP32が直近24時間分(10分間隔・最大144件)の記録を保持しており、このページを開いていない間のデータも表示されます。ESP32の再起動時には履歴がリセットされます。</p>
   </div>
 </div>
 
@@ -483,6 +483,7 @@ const MQTT_HOST = "wss://40ac0dad86dd4d6aa88e586c1597e810.s1.eu.hivemq.cloud:888
 
 const COMMAND_TOPIC = "home/aircon/command";
 const STATUS_TOPIC  = "home/aircon/status";
+const HISTORY_TOPIC = "home/aircon/history";
 
 let state = { power: false, mode: "cool", temp: 26 };
 let powerfulOn = false;
@@ -580,17 +581,27 @@ function initHistoryChart() {
 }
 
 function pushHistory(temp, hum) {
-  if (!historyChart) return;
-  const label = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
-  historyChart.data.labels.push(label);
-  historyChart.data.datasets[0].data.push(temp);
-  historyChart.data.datasets[1].data.push(hum);
+  // このダッシュボード自身では履歴を蓄積せず、ESP32側で保持している
+  // 「home/aircon/history」の内容をそのまま使う方式に変更しました。
+  // (ページを閉じていた間のデータも、ESP32側が記録し続けているため反映されます)
+}
 
-  if (historyChart.data.labels.length > MAX_HISTORY) {
-    historyChart.data.labels.shift();
-    historyChart.data.datasets[0].data.shift();
-    historyChart.data.datasets[1].data.shift();
+function renderHistoryFromPayload(data) {
+  if (!historyChart) return;
+  const temps = Array.isArray(data.temperature) ? data.temperature : [];
+  const hums = Array.isArray(data.humidity) ? data.humidity : [];
+  const intervalMin = typeof data.interval_minutes === 'number' ? data.interval_minutes : 10;
+  const n = temps.length;
+  const now = new Date();
+  const labels = [];
+  for (let i = 0; i < n; i++) {
+    const minutesAgo = (n - 1 - i) * intervalMin;
+    const t = new Date(now.getTime() - minutesAgo * 60000);
+    labels.push(t.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }));
   }
+  historyChart.data.labels = labels;
+  historyChart.data.datasets[0].data = temps;
+  historyChart.data.datasets[1].data = hums;
   historyChart.update('none');
 }
 
@@ -620,6 +631,7 @@ function connectMqtt(username, password) {
     el.connDot.classList.add('live');
     el.connText.textContent = '接続中';
     client.subscribe(STATUS_TOPIC);
+    client.subscribe(HISTORY_TOPIC);
     document.getElementById('loginOverlay').style.display = 'none';
   });
 
@@ -648,12 +660,16 @@ function connectMqtt(username, password) {
         if (typeof data.humidity === 'number') {
           el.roomHum.textContent = '湿度 ' + data.humidity.toFixed(0) + '%';
         }
-        if (typeof data.temperature === 'number' && typeof data.humidity === 'number') {
-          pushHistory(data.temperature, data.humidity);
-        }
         el.roomUpdated.textContent = '最終更新 ' + new Date().toLocaleTimeString('ja-JP');
       } catch (e) {
         console.error('status JSON parse error', e);
+      }
+    } else if (topic === HISTORY_TOPIC) {
+      try {
+        const data = JSON.parse(payload.toString());
+        renderHistoryFromPayload(data);
+      } catch (e) {
+        console.error('history JSON parse error', e);
       }
     }
   });
