@@ -354,6 +354,7 @@
     padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom) 0;
   }
   .history-overlay.hidden { display: none; }
+  .login-overlay.hidden { display: none; }
 
   .history-header {
     display: flex;
@@ -395,7 +396,7 @@
 </head>
 <body>
 
-<div class="login-overlay" id="loginOverlay">
+<div class="login-overlay hidden" id="loginOverlay">
   <form class="login-form" id="loginForm" autocomplete="on">
     <div class="login-title">MQTTブローカーに接続</div>
     <div class="login-sub">認証情報はこのページのコードには含まれていません。初回入力後、Safariに保存すれば次回から自動入力できます。</div>
@@ -484,6 +485,7 @@ const MQTT_HOST = "wss://40ac0dad86dd4d6aa88e586c1597e810.s1.eu.hivemq.cloud:888
 const COMMAND_TOPIC = "home/aircon/command";
 const STATUS_TOPIC  = "home/aircon/status";
 const HISTORY_TOPIC = "home/aircon/history";
+const STATE_TOPIC   = "home/aircon/state";
 
 let state = { power: false, mode: "cool", temp: 26 };
 let powerfulOn = false;
@@ -632,7 +634,8 @@ function connectMqtt(username, password) {
     el.connText.textContent = '接続中';
     client.subscribe(STATUS_TOPIC);
     client.subscribe(HISTORY_TOPIC);
-    document.getElementById('loginOverlay').style.display = 'none';
+    client.subscribe(STATE_TOPIC);
+    document.getElementById('loginOverlay').classList.add('hidden');
   });
 
   client.on('reconnect', () => {
@@ -648,6 +651,7 @@ function connectMqtt(username, password) {
   client.on('error', (err) => {
     console.error('MQTT接続エラー', err);
     document.getElementById('loginError').textContent = '接続に失敗しました。Username/Passwordを確認してください。';
+    document.getElementById('loginOverlay').classList.remove('hidden');
   });
 
   client.on('message', (topic, payload) => {
@@ -671,6 +675,16 @@ function connectMqtt(username, password) {
       } catch (e) {
         console.error('history JSON parse error', e);
       }
+    } else if (topic === STATE_TOPIC) {
+      try {
+        const data = JSON.parse(payload.toString());
+        if (typeof data.power === 'boolean') state.power = data.power;
+        if (typeof data.mode === 'string')   state.mode = data.mode;
+        if (typeof data.temp === 'number')   state.temp = data.temp;
+        renderState();
+      } catch (e) {
+        console.error('state JSON parse error', e);
+      }
     }
   });
 }
@@ -687,6 +701,30 @@ document.getElementById('loginForm').addEventListener('submit', (e) => {
     try {
       navigator.credentials.store(new PasswordCredential(e.target));
     } catch (err) { /* 非対応でも致命的ではないため無視 */ }
+  }
+});
+
+// ---- ページを開いた時、保存済みの認証情報があれば自動ログインを試みる ----
+window.addEventListener('load', async () => {
+  let autoLoginAttempted = false;
+
+  if (window.PasswordCredential && navigator.credentials) {
+    try {
+      const cred = await navigator.credentials.get({
+        password: true,
+        mediation: 'silent', // ユーザーに確認せず、保存済みがあれば取得
+      });
+      if (cred && cred.id && cred.password) {
+        autoLoginAttempted = true;
+        connectMqtt(cred.id, cred.password);
+      }
+    } catch (e) {
+      console.log('自動ログインを利用できませんでした', e);
+    }
+  }
+
+  if (!autoLoginAttempted) {
+    document.getElementById('loginOverlay').classList.remove('hidden');
   }
 });
 
