@@ -676,6 +676,11 @@ function connectMqtt(username, password) {
         console.error('history JSON parse error', e);
       }
     } else if (topic === STATE_TOPIC) {
+      if (Date.now() - lastLocalActionTime < STATE_IGNORE_WINDOW_MS) {
+        // 直近に自分で操作した直後のため、サーバー側の遅延した確認応答による
+        // 表示のちらつきを避けるためスキップする(少し待てば次の確認で反映される)
+        return;
+      }
       try {
         const data = JSON.parse(payload.toString());
         if (typeof data.power === 'boolean') state.power = data.power;
@@ -737,8 +742,15 @@ function publish(payload) {
 }
 
 // ---- 操作 ----
+// 直近で自分がボタン操作をした時刻。この直後にサーバーから届く確認応答は、
+// 連続操作時に一瞬古い値へ戻って見える「ちらつき」の原因になるため、
+// 一定時間は反映せず、楽観的UI(自分の操作直後の表示)を優先する。
+let lastLocalActionTime = 0;
+const STATE_IGNORE_WINDOW_MS = 1200;
+
 el.powerSwitch.addEventListener('click', () => {
   state.power = !state.power;
+  lastLocalActionTime = Date.now();
   renderState();
   publish({ power: state.power, mode: state.mode, temp: state.temp });
   showToast(state.power ? '電源ONを送信しました' : '電源OFFを送信しました');
@@ -748,6 +760,7 @@ document.querySelectorAll('.mode-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     state.mode = btn.dataset.mode;
     state.power = true;
+    lastLocalActionTime = Date.now();
     renderState();
     publish({ power: true, mode: state.mode, temp: state.temp });
     showToast(btn.textContent + 'に切り替えました');
@@ -756,6 +769,7 @@ document.querySelectorAll('.mode-btn').forEach(btn => {
 
 document.getElementById('tempUp').addEventListener('click', () => {
   state.temp = Math.min(31, state.temp + 1);
+  lastLocalActionTime = Date.now();
   renderState();
   publish({ temp: state.temp });
   showToast(state.temp + '℃に設定しました');
@@ -763,6 +777,7 @@ document.getElementById('tempUp').addEventListener('click', () => {
 
 document.getElementById('tempDown').addEventListener('click', () => {
   state.temp = Math.max(16, state.temp - 1);
+  lastLocalActionTime = Date.now();
   renderState();
   publish({ temp: state.temp });
   showToast(state.temp + '℃に設定しました');
@@ -770,6 +785,7 @@ document.getElementById('tempDown').addEventListener('click', () => {
 
 el.powerfulSwitch.addEventListener('click', () => {
   powerfulOn = !powerfulOn;
+  lastLocalActionTime = Date.now();
   renderState();
   publish({ powerful: powerfulOn });
   showToast(powerfulOn ? 'パワフルONを送信しました' : 'パワフルOFFを送信しました');
