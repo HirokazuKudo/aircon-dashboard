@@ -196,6 +196,12 @@
   .mode-btn.active[data-mode="heat"] { background: rgba(232,163,61,0.16); border-color: var(--heat); color: var(--heat); }
   .mode-btn.active[data-mode="dry"]  { background: rgba(155,140,224,0.16); border-color: var(--dry); color: var(--dry); }
 
+  .fan-btn.active, .vane-btn.active, .dry-btn.active, .timer-type-btn.active {
+    background: rgba(94,200,216,0.16);
+    border-color: var(--cool);
+    color: var(--cool);
+  }
+
   .temp-row {
     display: flex;
     align-items: center;
@@ -411,11 +417,81 @@
   <div class="brand">エアコン</div>
   <div style="display:flex; align-items:center; gap:10px;">
     <div class="conn"><span class="conn-dot" id="connDot"></span><span id="connText">未接続</span></div>
+    <button class="icon-btn" id="advancedBtn" aria-label="詳細設定を開く">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
     <button class="icon-btn" id="historyBtn" aria-label="温湿度の推移を見る">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="14 7 21 7 21 14"/></svg>
     </button>
   </div>
 </header>
+
+<div class="history-overlay hidden" id="advancedOverlay">
+  <div class="history-header">
+    <div class="history-title">詳細設定</div>
+    <button class="icon-btn" id="advancedClose" aria-label="閉じる">✕</button>
+  </div>
+  <div class="history-body" style="overflow-y:auto;">
+
+    <div class="card" style="margin-bottom:14px;">
+      <div class="card-title">風速</div>
+      <div class="mode-row" id="fanRow">
+        <button class="mode-btn fan-btn" data-fan="auto">自動</button>
+        <button class="mode-btn fan-btn" data-fan="low">弱</button>
+        <button class="mode-btn fan-btn" data-fan="medium">中</button>
+        <button class="mode-btn fan-btn" data-fan="high">強</button>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:14px;">
+      <div class="card-title">風向(上下)</div>
+      <div class="mode-row" id="vaneRow" style="flex-wrap:wrap; row-gap:8px;">
+        <button class="mode-btn vane-btn" data-vane="auto" style="flex:1 1 30%;">自動</button>
+        <button class="mode-btn vane-btn" data-vane="1" style="flex:1 1 30%;">上</button>
+        <button class="mode-btn vane-btn" data-vane="2" style="flex:1 1 30%;">やや上</button>
+        <button class="mode-btn vane-btn" data-vane="3" style="flex:1 1 30%;">中央</button>
+        <button class="mode-btn vane-btn" data-vane="4" style="flex:1 1 30%;">やや下</button>
+        <button class="mode-btn vane-btn" data-vane="5" style="flex:1 1 30%;">下</button>
+        <button class="mode-btn vane-btn" data-vane="swing" style="flex:1 1 30%;">スイング</button>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:14px;">
+      <div class="card-title">除湿の強さ(除湿運転中のみ有効)</div>
+      <div class="mode-row" id="dryRow">
+        <button class="mode-btn dry-btn" data-dry="weak">弱</button>
+        <button class="mode-btn dry-btn" data-dry="standard">標準</button>
+        <button class="mode-btn dry-btn" data-dry="strong">強</button>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:14px;">
+      <div class="power-row">
+        <div>
+          <div class="power-label" style="font-size:14px;">内部クリーン</div>
+          <div class="power-sub">運転停止後の内部乾燥</div>
+        </div>
+        <button class="switch" id="cleanSwitch"></button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">タイマー</div>
+      <div class="mode-row" id="timerTypeRow">
+        <button class="mode-btn timer-type-btn" data-timertype="on">入</button>
+        <button class="mode-btn timer-type-btn" data-timertype="off">切</button>
+        <button class="mode-btn timer-type-btn" data-timertype="disable">解除</button>
+      </div>
+      <div class="temp-row" id="timerHoursRow">
+        <button class="temp-step" id="timerHoursDown">−</button>
+        <div class="temp-value" id="timerHoursValue">4.0<span>h</span></div>
+        <button class="temp-step" id="timerHoursUp">＋</button>
+      </div>
+      <button id="timerApplyBtn" style="width:100%; margin-top:14px; background:var(--cool); color:#0c1216; border:none; border-radius:12px; padding:13px 0; font-size:15px; font-weight:700; cursor:pointer;">タイマーを設定</button>
+    </div>
+
+  </div>
+</div>
 
 <div class="history-overlay hidden" id="historyOverlay">
   <div class="history-header">
@@ -617,6 +693,97 @@ document.getElementById('historyClose').addEventListener('click', () => {
 });
 
 initHistoryChart();
+
+// ---- 詳細設定オーバーレイ ----
+document.getElementById('advancedBtn').addEventListener('click', () => {
+  document.getElementById('advancedOverlay').classList.remove('hidden');
+});
+document.getElementById('advancedClose').addEventListener('click', () => {
+  document.getElementById('advancedOverlay').classList.add('hidden');
+});
+
+// 風速
+document.querySelectorAll('.fan-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.fan-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    lastLocalActionTime = Date.now();
+    publish({ fan: btn.dataset.fan });
+    showToast('風速を変更しました');
+  });
+});
+
+// 風向(上下)
+document.querySelectorAll('.vane-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.vane-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    lastLocalActionTime = Date.now();
+    publish({ vane: btn.dataset.vane });
+    showToast('風向を変更しました');
+  });
+});
+
+// 除湿の強さ
+document.querySelectorAll('.dry-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.dry-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    lastLocalActionTime = Date.now();
+    publish({ dryLevel: btn.dataset.dry });
+    showToast('除湿の強さを変更しました');
+  });
+});
+
+// 内部クリーン
+let cleanOn = false;
+document.getElementById('cleanSwitch').addEventListener('click', () => {
+  cleanOn = !cleanOn;
+  document.getElementById('cleanSwitch').classList.toggle('on', cleanOn);
+  lastLocalActionTime = Date.now();
+  publish({ clean: cleanOn });
+  showToast(cleanOn ? '内部クリーンONを送信しました' : '内部クリーンOFFを送信しました');
+});
+
+// タイマー
+let timerType = 'on';
+let timerHours = 4.0;
+
+document.querySelectorAll('.timer-type-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    timerType = btn.dataset.timertype;
+    document.querySelectorAll('.timer-type-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const hoursRow = document.getElementById('timerHoursRow');
+    hoursRow.style.display = (timerType === 'disable') ? 'none' : 'flex';
+  });
+});
+
+function renderTimerHours() {
+  document.getElementById('timerHoursValue').innerHTML = timerHours.toFixed(1) + '<span>h</span>';
+}
+
+document.getElementById('timerHoursUp').addEventListener('click', () => {
+  timerHours = Math.min(12, timerHours + 0.5);
+  renderTimerHours();
+});
+document.getElementById('timerHoursDown').addEventListener('click', () => {
+  timerHours = Math.max(0.5, timerHours - 0.5);
+  renderTimerHours();
+});
+
+document.getElementById('timerApplyBtn').addEventListener('click', () => {
+  lastLocalActionTime = Date.now();
+  if (timerType === 'disable') {
+    publish({ timer: 'disable' });
+    showToast('タイマーを解除しました');
+  } else {
+    publish({ timer: timerType, timerHours: timerHours });
+    showToast('タイマーを設定しました(' + timerHours + 'h)');
+  }
+});
+
+renderTimerHours();
 
 // ---- MQTT接続(ログインフォーム送信時にのみ実行) ----
 let client = null;
