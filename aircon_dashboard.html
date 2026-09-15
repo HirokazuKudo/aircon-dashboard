@@ -866,6 +866,27 @@ function connectMqtt(username, password) {
             b.classList.toggle('active', b.dataset.vane === vaneKey);
           });
         }
+        if (typeof data.clean === 'boolean') {
+          cleanOn = data.clean;
+          document.getElementById('cleanSwitch').classList.toggle('on', cleanOn);
+        }
+        if (typeof data.dryLevel === 'string') {
+          document.querySelectorAll('.dry-btn').forEach(b => {
+            b.classList.toggle('active', b.dataset.dry === data.dryLevel);
+          });
+        }
+        if (typeof data.timerType === 'string') {
+          timerType = data.timerType;
+          document.querySelectorAll('.timer-type-btn').forEach(b => {
+            b.classList.toggle('active', b.dataset.timertype === timerType);
+          });
+          const hoursRow = document.getElementById('timerHoursRow');
+          hoursRow.style.display = (timerType === 'disable') ? 'none' : 'flex';
+        }
+        if (typeof data.timerHours === 'number' && data.timerHours > 0) {
+          timerHours = data.timerHours;
+          renderTimerHours();
+        }
       } catch (e) {
         console.error('state JSON parse error', e);
       }
