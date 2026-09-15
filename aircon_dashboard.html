@@ -180,7 +180,7 @@
     margin-top: 16px;
   }
 
-  .mode-btn {
+  .mode-btn, .pill-btn {
     flex: 1;
     padding: 12px 0;
     border-radius: 14px;
@@ -436,32 +436,32 @@
     <div class="card" style="margin-bottom:14px;">
       <div class="card-title">風速</div>
       <div class="mode-row" id="fanRow">
-        <button class="mode-btn fan-btn" data-fan="auto">自動</button>
-        <button class="mode-btn fan-btn" data-fan="low">弱</button>
-        <button class="mode-btn fan-btn" data-fan="medium">中</button>
-        <button class="mode-btn fan-btn" data-fan="high">強</button>
+        <button class="pill-btn fan-btn" data-fan="auto">自動</button>
+        <button class="pill-btn fan-btn" data-fan="low">弱</button>
+        <button class="pill-btn fan-btn" data-fan="medium">中</button>
+        <button class="pill-btn fan-btn" data-fan="high">強</button>
       </div>
     </div>
 
     <div class="card" style="margin-bottom:14px;">
       <div class="card-title">風向(上下)</div>
       <div class="mode-row" id="vaneRow" style="flex-wrap:wrap; row-gap:8px;">
-        <button class="mode-btn vane-btn" data-vane="auto" style="flex:1 1 30%;">自動</button>
-        <button class="mode-btn vane-btn" data-vane="1" style="flex:1 1 30%;">上</button>
-        <button class="mode-btn vane-btn" data-vane="2" style="flex:1 1 30%;">やや上</button>
-        <button class="mode-btn vane-btn" data-vane="3" style="flex:1 1 30%;">中央</button>
-        <button class="mode-btn vane-btn" data-vane="4" style="flex:1 1 30%;">やや下</button>
-        <button class="mode-btn vane-btn" data-vane="5" style="flex:1 1 30%;">下</button>
-        <button class="mode-btn vane-btn" data-vane="swing" style="flex:1 1 30%;">スイング</button>
+        <button class="pill-btn vane-btn" data-vane="auto" style="flex:1 1 30%;">自動</button>
+        <button class="pill-btn vane-btn" data-vane="1" style="flex:1 1 30%;">上</button>
+        <button class="pill-btn vane-btn" data-vane="2" style="flex:1 1 30%;">やや上</button>
+        <button class="pill-btn vane-btn" data-vane="3" style="flex:1 1 30%;">中央</button>
+        <button class="pill-btn vane-btn" data-vane="4" style="flex:1 1 30%;">やや下</button>
+        <button class="pill-btn vane-btn" data-vane="5" style="flex:1 1 30%;">下</button>
+        <button class="pill-btn vane-btn" data-vane="swing" style="flex:1 1 30%;">スイング</button>
       </div>
     </div>
 
     <div class="card" style="margin-bottom:14px;">
       <div class="card-title">除湿の強さ(除湿運転中のみ有効)</div>
       <div class="mode-row" id="dryRow">
-        <button class="mode-btn dry-btn" data-dry="weak">弱</button>
-        <button class="mode-btn dry-btn" data-dry="standard">標準</button>
-        <button class="mode-btn dry-btn" data-dry="strong">強</button>
+        <button class="pill-btn dry-btn" data-dry="weak">弱</button>
+        <button class="pill-btn dry-btn" data-dry="standard">標準</button>
+        <button class="pill-btn dry-btn" data-dry="strong">強</button>
       </div>
     </div>
 
@@ -478,9 +478,9 @@
     <div class="card">
       <div class="card-title">タイマー</div>
       <div class="mode-row" id="timerTypeRow">
-        <button class="mode-btn timer-type-btn" data-timertype="on">入</button>
-        <button class="mode-btn timer-type-btn" data-timertype="off">切</button>
-        <button class="mode-btn timer-type-btn" data-timertype="disable">解除</button>
+        <button class="pill-btn timer-type-btn" data-timertype="on">入</button>
+        <button class="pill-btn timer-type-btn" data-timertype="off">切</button>
+        <button class="pill-btn timer-type-btn" data-timertype="disable">解除</button>
       </div>
       <div class="temp-row" id="timerHoursRow">
         <button class="temp-step" id="timerHoursDown">−</button>
@@ -591,7 +591,7 @@ function renderState() {
   el.powerSwitch.classList.toggle('on', state.power);
   el.powerSub.textContent = state.power ? '運転中' : 'オフ';
   el.tempValue.innerHTML = state.temp + '<span>℃</span>';
-  document.querySelectorAll('.mode-btn').forEach(btn => {
+  document.querySelectorAll('.mode-btn[data-mode]').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.mode === state.mode);
   });
   el.powerfulSwitch.classList.toggle('on', powerfulOn);
@@ -844,8 +844,6 @@ function connectMqtt(username, password) {
       }
     } else if (topic === STATE_TOPIC) {
       if (Date.now() - lastLocalActionTime < STATE_IGNORE_WINDOW_MS) {
-        // 直近に自分で操作した直後のため、サーバー側の遅延した確認応答による
-        // 表示のちらつきを避けるためスキップする(少し待てば次の確認で反映される)
         return;
       }
       try {
@@ -854,6 +852,20 @@ function connectMqtt(username, password) {
         if (typeof data.mode === 'string')   state.mode = data.mode;
         if (typeof data.temp === 'number')   state.temp = data.temp;
         renderState();
+
+        if (typeof data.fan === 'number') {
+          const fanMap = { 0: 'auto', 1: 'low', 2: 'medium', 3: 'high' };
+          const fanKey = fanMap[data.fan];
+          document.querySelectorAll('.fan-btn').forEach(b => {
+            b.classList.toggle('active', b.dataset.fan === fanKey);
+          });
+        }
+        if (typeof data.vane === 'number') {
+          const vaneKey = (data.vane === 0) ? 'auto' : (data.vane === 7) ? 'swing' : String(data.vane);
+          document.querySelectorAll('.vane-btn').forEach(b => {
+            b.classList.toggle('active', b.dataset.vane === vaneKey);
+          });
+        }
       } catch (e) {
         console.error('state JSON parse error', e);
       }
